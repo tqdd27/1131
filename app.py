@@ -1,16 +1,19 @@
 import cv2
-import mediapipe as mp
 import numpy as np
 import streamlit as st
 from streamlit_webrtc import WebRtcMode, webrtc_streamer
 
+# 修正點 1：分開引入 mediapipe 與明確的 python 解決方案子模組
+import mediapipe as mp
+import mediapipe.python.solutions.face_mesh as mp_face_mesh
+import mediapipe.python.solutions.hands as mp_hands
+
 # --- 初始化 Mediapipe 模型 ---
-mp_face_mesh = mp.solutions.face_mesh
+# 修正點 2：直接使用引入的子模組，不用經由 mp.solutions 呼叫
 face_mesh = mp_face_mesh.FaceMesh(
     max_num_faces=1, refine_landmarks=True, min_detection_confidence=0.5
 )
 
-mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(
     max_num_hands=1, min_detection_confidence=0.5, min_tracking_confidence=0.5
 )
