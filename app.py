@@ -2,9 +2,17 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import streamlit as st
-from streamlit_webrtc import WebRtcMode, webrtc_streamer
+from streamlit_webrtc import WebRtcMode, webrtc_streamer, RTCConfiguration
 
-# --- 初始化 Mediapipe 模型 ---
+# --- 1. 初始化 ＆ 設定 ---
+st.title("MediaPipe 拍照偵測系統")
+
+# 配置免費的 Google STUN 伺服器，確保雲端佈署也能順利啟動鏡頭
+RTC_CONFIGURATION = RTCConfiguration(
+    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"]}]}
+)
+
+# 初始化 MediaPipe 模組
 mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(
     max_num_faces=1, refine_landmarks=True, min_detection_confidence=0.5
@@ -12,29 +20,62 @@ face_mesh = mp_face_mesh.FaceMesh(
 
 mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(
-    max_num_hands=1, min_detection_confidence=0.5, min_tracking_confidence=0.5
+    static_image_mode=True, max_num_hands=2, min_detection_confidence=0.5
 )
 
-hands = mp_hands.Hands(
-    max_num_hands=1, min_detection_confidence=0.5, min_tracking_confidence=0.5
+# --- 2. 建立視訊組件 ---
+# 使用 ctx 來捕捉鏡頭狀態
+ctx = webrtc_streamer(
+    key="snapshot-mode",
+    mode=WebRtcMode.SENDRECV,  # 接收並傳送畫面
+    rtc_configuration=RTC_CONFIGURATION,
+    media_stream_constraints={"video": True, "audio": False}, # 只需要影像，關閉聲音
+    async_processing=True
 )
 
-
-# --- 輔助函式：貼圖覆蓋 (支援透明度) ---
-def overlay_image(background, overlay, x, y, w, h):
-    if overlay is None or w <= 0 or h <= 0:
-        return background
-    try:
-        overlay_resized = cv2.resize(
-            overlay, (w, h), interpolation=cv2.INTER_AREA
-        )
-        # 確保座標不超出畫面邊界
-        h_bg, w_bg, _ = background.shape
-        x1, y1 = max(0, x), max(0, y)
-        x2, y2 = min(w_bg, x + w), min(h_bg, y + h)
-
-        x1_o, y1_o = x1 - x, y1 - y
-        x2_o, y2_o = x1_o + (x2 - x1), y1_o + (y2 - y1)
+# --- 3. 拍照與偵測按鈕 ---
+if ctx.video_receiver:
+    # 當鏡頭成功連線後，顯示拍照按鈕
+    if st.button("📸 點我拍照並識別"):
+        try:
+            # 從 WebRTC 接收器中抓取最新的一影格（Frame）
+            img_frame = ctx.video_receiver.get_frame()
+            
+            if img_frame is not None:
+                # 將框架轉換為 Np Array (BGR 格式)
+                bgr_image = img_frame.to_ndarray(format="bgr24")
+                # 轉為 MediaPipe 需要的 RGB 格式
+                rgb_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2RGB)
+                
+                st.write("正在分析畫面...")
+                
+                # --- 執行 MediaPipe 偵測 ---
+                face_results = face_mesh.process(rgb_image)
+                hand_results = hands.process(rgb_image)
+                
+                # 繪製結果（複用您原本的繪圖邏輯，此處為示意範例）
+                annotated_image = bgr_image.copy()
+                
+                # 範例：如果偵測到手部，在畫面寫字
+                if hand_results.multi_hand_landmarks:
+                    cv2.putText(annotated_image, "Hand Detected!", (10, 50), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                
+                # 範例：如果偵測到臉部
+                if face_results.multi_face_landmarks:
+                    cv2.putText(annotated_image, "Face Detected!", (10, 100), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+                
+                # --- 顯示結果照片 ---
+                st.subheader("偵測結果")
+                st.image(cv2.cvtColor(annotated_image, cv2.COLOR_BGR2RGB), use_column_width=True)
+            else:
+                st.warning("未能擷取到畫面，請確認視訊鏡頭是否已啟動並允許瀏覽器存取。")
+                
+        except Exception as e:
+            st.error(f"拍照識別時發生錯誤: {e}")
+else:
+    st.info("請先點擊上方的『Start』按鈕啟動您的視訊鏡頭。")        x2_o, y2_o = x1_o + (x2 - x1), y1_o + (y2 - y1)
 
         if x2 - x1 <= 0 or y2 - y1 <= 0:
             return background
