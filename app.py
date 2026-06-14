@@ -75,24 +75,25 @@ if ctx.video_receiver:
         except Exception as e:
             st.error(f"拍照識別時發生錯誤: {e}")
 else:
-    st.info("請先點擊上方的『Start』按鈕啟動您的視訊鏡頭。")        #x2_o, y2_o = x1_o + (x2 - x1), y1_o + (y2 - y1)
+    st.info("請先點擊上方的『Start』按鈕啟動您的視訊鏡頭。")        
+    x2_o, y2_o = x1_o + (x2 - x1), y1_o + (y2 - y1)
 
-        if x2 - x1 <= 0 or y2 - y1 <= 0:
-            return background
+    if x2 - x1 <= 0 or y2 - y1 <= 0:
+        return background
 
-        crop_background = background[y1:y2, x1:x2]
-        crop_overlay = overlay_resized[y1_o:y2_o, x1_o:x2_o]
+    crop_background = background[y1:y2, x1:x2]
+    crop_overlay = overlay_resized[y1_o:y2_o, x1_o:x2_o]
 
-        alpha = crop_overlay[:, :, 3] / 255.0
-        alpha = np.expand_dims(alpha, axis=2)
+    alpha = crop_overlay[:, :, 3] / 255.0
+    alpha = np.expand_dims(alpha, axis=2)
 
-        composite = crop_overlay[:, :, :3] * alpha + crop_background * (
-            1 - alpha
-        )
-        background[y1:y2, x1:x2] = composite.astype(np.uint8)
-    except Exception as e:
-        pass
-    return background
+    composite = crop_overlay[:, :, :3] * alpha + crop_background * (
+        1 - alpha
+    )
+    background[y1:y2, x1:x2] = composite.astype(np.uint8)
+except Exception as e:
+    pass
+return background
 
 
 # --- 讀取貼圖資產 ---
