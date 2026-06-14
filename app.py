@@ -9,7 +9,6 @@ import os
 st.title("歷史名人動作辨識貼圖系統")
 st.subheader("請選擇您想變身的角色，做出指定動作後點擊拍照！")
 
-# 角色選擇選單
 role = st.selectbox(
     "選擇變身角色",
     ["愛因斯坦 (張開嘴巴)", "孔子 (手心朝己攤平)", "秦始皇 (比讚)", "釋迦牟尼佛 (閉眼)", "路易十六 (直接拍照)"]
@@ -20,12 +19,12 @@ RTC_CONFIGURATION = RTCConfiguration(
     {"iceServers": [{"urls": ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"]}]}
 )
 
-# 初始化 MediaPipe 模組
+# 初始化 MediaPipe
 mp_face_mesh = mp.solutions.face_mesh
-face_mesh = mp_face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True, min_detection_confidence=0.5)
+face_mesh = mp_face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True, min_detection_confidence=0.4)
 
 mp_hands = mp.solutions.hands
-hands = mp_hands.Hands(static_image_mode=True, max_num_hands=2, min_detection_confidence=0.5)
+hands = mp_hands.Hands(static_image_mode=True, max_num_hands=2, min_detection_confidence=0.4)
 
 # --- 2. 輔助函式：安全貼圖疊加 (支援透明度 PNG) ---
 def overlay_transparent(background, overlay, x, y, overlay_size=None):
@@ -65,10 +64,12 @@ def overlay_transparent(background, overlay, x, y, overlay_size=None):
     background[y1:y2, x1:x2] = img_crop
     return background
 
-# --- 3. 讀取貼圖檔案的輔助函式 ---
+# --- 3. 讀取 assets 資料夾內貼圖的輔助函式 ---
 def load_overlay(filename):
-    if os.path.exists(filename):
-        return cv2.imread(filename, cv2.IMREAD_UNCHANGED)
+    # 自動加上 assets/ 路徑
+    full_path = os.path.join("assets", filename)
+    if os.path.exists(full_path):
+        return cv2.imread(full_path, cv2.IMREAD_UNCHANGED)
     return None
 
 # --- 4. 啟動視訊鏡頭 ---
@@ -103,31 +104,27 @@ if ctx.video_receiver:
             if "愛因斯坦" in role:
                 if face_res.multi_face_landmarks:
                     face_landmarks = face_res.multi_face_landmarks[0].landmark
-                    # 嘴唇內側特徵點：13 (上唇內側), 14 (下唇內側)
                     mouth_top = face_landmarks[13].y * h
                     mouth_bottom = face_landmarks[14].y * h
                     face_height = (face_landmarks[152].y - face_landmarks[10].y) * h
                     
-                    # 嘴巴打開距離大於臉長的 5% 判定為張嘴
-                    if (mouth_bottom - mouth_top) > (face_height * 0.05):
+                    if (mouth_bottom - mouth_top) > (face_height * 0.03):
                         action_detected = True
+                        
                         # 畫面轉黑白濾鏡
                         gray = cv2.cvtColor(output_img, cv2.COLOR_BGR2GRAY)
                         output_img = cv2.merge([gray, gray, gray])
                         
-                        # 計算頭部尺寸與核心座標
                         f_w = int((face_landmarks[454].x - face_landmarks[234].x) * w)
                         hair_w = int(f_w * 1.8)
                         hair_h = int(face_height * 1.3)
                         
-                        # 取得頭頂 (10)、嘴巴中央 (13) 的精準座標
                         tx, ty = int(face_landmarks[10].x * w), int(face_landmarks[10].y * h)
                         mx, my = int(face_landmarks[13].x * w), int(face_landmarks[13].y * h)
                         
                         hair = load_overlay("Einstein_hair.png")
                         tongue = load_overlay("Einstein_tongue.png")
                         
-                        # 頭上 P 上頭髮，嘴巴 P 上舌頭
                         output_img = overlay_transparent(output_img, hair, tx - hair_w//2, ty - int(hair_h * 0.7), (hair_w, hair_h))
                         output_img = overlay_transparent(output_img, tongue, mx - int(f_w * 0.3), my, (int(f_w * 0.6), int(f_w * 0.6)))
                 
@@ -135,31 +132,28 @@ if ctx.video_receiver:
                     st.warning("偵測失敗：請在大聲張開嘴巴的同時按下拍照！")
 
             # ────────────────────────────────────────────────────────
-            # 歷史人物 B：孔子 (手心朝己攤平)
+            # 歷史人物 B：孔子 (手心朝向自己，手攤平)
             # ────────────────────────────────────────────────────────
             elif "孔子" in role:
                 if hand_res.multi_hand_landmarks:
                     action_detected = True
                     hand_landmarks = hand_res.multi_hand_landmarks[0].landmark
-                    # 取得手掌中心座標 (特徵點 9)
                     hx, hy = int(hand_landmarks[9].x * w), int(hand_landmarks[9].y * h)
                     
                     if face_res.multi_face_landmarks:
                         fl = face_res.multi_face_landmarks[0].landmark
                         f_w = int((fl[454].x - fl[234].x) * w)
                         
-                        # 頭頂 (10) 與下巴 (152) 座標
                         tx, ty = int(fl[10].x * w), int(fl[10].y * h)
                         bx, by = int(fl[152].x * w), int(fl[152].y * h)
                         
-                        cap = load_overlay("holy_light.pngkongzi_cap.png")
+                        # 已對應正確的 assets 內檔名
+                        cap = load_overlay("kongzi_cap.png")
                         beard = load_overlay("kongzi_beard.png")
                         
-                        # 頭上 P 上帽子，嘴巴/下巴 P 上鬍鬚
                         output_img = overlay_transparent(output_img, cap, tx - f_w, ty - int(f_w * 1.4), (f_w * 2, f_w * 1.5))
                         output_img = overlay_transparent(output_img, beard, bx - int(f_w * 0.5), by - int(f_w * 0.2), (f_w, int(f_w * 1.2)))
                     
-                    # 手上 P 上袖子
                     sleeves = load_overlay("kongzi_sleeves.png")
                     output_img = overlay_transparent(output_img, sleeves, hx - 120, hy - 120, (240, 240))
                 
@@ -172,7 +166,6 @@ if ctx.video_receiver:
             elif "秦始皇" in role:
                 if hand_res.multi_hand_landmarks:
                     hl = hand_res.multi_hand_landmarks[0].landmark
-                    # 比讚特徵：大拇指尖 (4) 高於 大拇指基部 (2)，且食指尖 (8) 低於食指基部 (6)
                     if hl[4].y < hl[2].y and hl[8].y > hl[6].y:
                         action_detected = True
                         
@@ -186,9 +179,7 @@ if ctx.video_receiver:
                             cap = load_overlay("qinshihuang_cap.png")
                             bear = load_overlay("polar_bear.png")
                             
-                            # 頭上 P 上帽子
                             output_img = overlay_transparent(output_img, cap, tx - f_w, ty - int(f_w * 1.4), (f_w * 2, f_w * 1.5))
-                            # 在下巴下 P 北極熊
                             output_img = overlay_transparent(output_img, bear, bx - int(f_w * 0.7), by, (int(f_w * 1.4), int(f_w * 1.4)))
                 
                 if not action_detected:
@@ -200,16 +191,14 @@ if ctx.video_receiver:
             elif "釋迦牟尼佛" in role:
                 if face_res.multi_face_landmarks:
                     fl = face_res.multi_face_landmarks[0].landmark
-                    # 右眼瞼上下特徵點：159, 145
                     eye_dist = abs(fl[159].y - fl[145].y)
                     
-                    if eye_dist < 0.016:  # 距離極小代表閉眼
+                    if eye_dist < 0.022:
                         action_detected = True
                         tx, ty = int(fl[10].x * w), int(fl[10].y * h)
                         f_w = int((fl[454].x - fl[234].x) * w)
                         light_size = int(f_w * 3.0)
                         
-                        # 頭上 P 上聖光
                         light = load_overlay("holy_light.png")
                         output_img = overlay_transparent(output_img, light, tx - light_size//2, ty - int(light_size * 0.75), (light_size, light_size))
                 
@@ -227,12 +216,11 @@ if ctx.video_receiver:
                     f_w = int((fl[454].x - fl[234].x) * w)
                     tomato_size = int(f_w * 1.8)
                     
-                    # 整個頭 P 成番茄
-                    tomato = load_overlay("holy_light.pngtomato.png")
+                    # 已修正對應正確的 assets/tomato.png 檔名
+                    tomato = load_overlay("tomato.png")
                     output_img = overlay_transparent(output_img, tomato, cx - tomato_size//2, cy - tomato_size//2, (tomato_size, tomato_size))
                 else:
-                    # 若沒抓到臉，直接在畫面中間放番茄
-                    tomato = load_overlay("holy_light.pngtomato.png")
+                    tomato = load_overlay("tomato.png")
                     output_img = overlay_transparent(output_img, tomato, w//3, h//3, (w//3, w//3))
 
             # --- 最終成品呈現 ---
