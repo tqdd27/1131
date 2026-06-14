@@ -27,7 +27,7 @@ face_mesh = mp_face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True, min_de
 mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(static_image_mode=True, max_num_hands=2, min_detection_confidence=0.5)
 
-# --- 2. 輔助函式：安全貼圖疊加 (支援透明度 PNG) ---
+# --- 2. 修正後的輔助函式：安全貼圖疊加 (支援透明度 PNG) ---
 def overlay_transparent(background, overlay, x, y, overlay_size=None):
     if overlay is None:
         return background
@@ -39,7 +39,7 @@ def overlay_transparent(background, overlay, x, y, overlay_size=None):
     
     o_h, o_w, o_c = overlay.shape
     if o_c < 4:
-        # 如果不是放透明 PNG，強制轉為帶有 Alpha 通道
+        # 如果不是透明 PNG，強制轉為帶有 Alpha 通道
         overlay = cv2.cvtColor(overlay, cv2.COLOR_BGR2BGRA)
 
     # 計算覆蓋邊界，防止邊緣溢出崩潰
@@ -106,23 +106,19 @@ if ctx.video_receiver:
                     # 嘴唇上下特徵點：13 (上唇內側), 14 (下唇內側)
                     mouth_top = face_landmarks[13].y * h
                     mouth_bottom = face_landmarks[14].y * h
-                    # 臉部高度參考（額頭到下巴）
                     face_height = (face_landmarks[152].y - face_landmarks[10].y) * h
                     
-                    # 嘴巴打開距離大於臉長的 5% 判定為張嘴
                     if (mouth_bottom - mouth_top) > (face_height * 0.05):
                         action_detected = True
                         # 畫面轉黑白
                         gray = cv2.cvtColor(output_img, cv2.COLOR_BGR2GRAY)
                         output_img = cv2.merge([gray, gray, gray])
                         
-                        # 計算頭部位置與大小
                         head_w = int((face_landmarks[454].x - face_landmarks[234].x) * w * 1.8)
                         head_h = int(face_height * 1.5)
                         cx = int(face_landmarks[1].x * w)
                         cy = int(face_landmarks[1].y * h)
                         
-                        # P上頭髮與舌頭
                         hair = load_overlay("Einstein_hair.png")
                         tongue = load_overlay("Einstein_tongue.png")
                         output_img = overlay_transparent(output_img, hair, cx - head_w//2, cy - int(head_h * 0.8), (head_w, head_h))
@@ -136,13 +132,11 @@ if ctx.video_receiver:
             # ────────────────────────────────────────────────────────
             elif "孔子" in role:
                 if hand_res.multi_hand_landmarks:
-                    # 這裡簡化邏輯：有偵測到手即可觸發
                     action_detected = True
                     hand_landmarks = hand_res.multi_hand_landmarks[0].landmark
                     hx = int(hand_landmarks[9].x * w)
                     hy = int(hand_landmarks[9].y * h)
                     
-                    # 取得臉部位置放帽子與鬍鬚
                     if face_res.multi_face_landmarks:
                         fl = face_res.multi_face_landmarks[0].landmark
                         fx = int(fl[1].x * w)
@@ -154,7 +148,6 @@ if ctx.video_receiver:
                         output_img = overlay_transparent(output_img, cap, fx - f_w, fy - int(f_w * 1.5), (f_w * 2, f_w * 2))
                         output_img = overlay_transparent(output_img, beard, fx - f_w//2, fy, (f_w, f_w))
                     
-                    # 手部放袖子
                     sleeves = load_overlay("kongzi_sleeves.png")
                     output_img = overlay_transparent(output_img, sleeves, hx - 100, hy - 100, (200, 200))
                 
@@ -167,7 +160,6 @@ if ctx.video_receiver:
             elif "秦始皇" in role:
                 if hand_res.multi_hand_landmarks:
                     hl = hand_res.multi_hand_landmarks[0].landmark
-                    # 比讚特徵：大拇指尖(4) 高於 大拇指基部(2)，且其餘四指收起
                     if hl[4].y < hl[2].y and hl[8].x > hl[6].x:
                         action_detected = True
                         hx = int(hl[4].x * w)
@@ -182,7 +174,6 @@ if ctx.video_receiver:
                             cap = load_overlay("qinshihuang_cap.png")
                             output_img = overlay_transparent(output_img, cap, fx - f_w, fy - int(f_w * 1.5), (f_w * 2, f_w * 2))
                         
-                        # 旁邊加上北極熊
                         bear = load_overlay("polar_bear.png")
                         output_img = overlay_transparent(output_img, bear, hx, hy - 150, (200, 200))
                 
@@ -195,16 +186,14 @@ if ctx.video_receiver:
             elif "釋迦牟尼佛" in role:
                 if face_res.multi_face_landmarks:
                     fl = face_res.multi_face_landmarks[0].landmark
-                    # 檢測右眼上下距離：159 (上眼瞼), 145 (下眼瞼)
                     eye_dist = abs(fl[159].y - fl[145].y)
                     
-                    if eye_dist < 0.015:  # 距離極小代表閉眼
+                    if eye_dist < 0.015:
                         action_detected = True
-                        fx = int(fl[10].x * w)  # 額頭頂端位置
+                        fx = int(fl[10].x * w)
                         fy = int(fl[10].y * h)
                         f_w = int((fl[454].x - fl[234].x) * w * 2.5)
                         
-                        # 頭頂放上聖光
                         light = load_overlay("holy_light.png")
                         output_img = overlay_transparent(output_img, light, fx - f_w//2, fy - int(f_w * 0.8), (f_w, f_w))
                 
@@ -222,15 +211,13 @@ if ctx.video_receiver:
                     fy = int(fl[1].y * h)
                     f_w = int((fl[454].x - fl[234].x) * w * 1.5)
                     
-                    # 整個頭P成番茄
                     tomato = load_overlay("holy_light.pngtomato.png")
                     output_img = overlay_transparent(output_img, tomato, fx - f_w//2, fy - f_w//2, (f_w, f_w))
                 else:
-                    # 沒偵測到臉也在畫面中央塞個番茄
                     tomato = load_overlay("holy_light.pngtomato.png")
                     output_img = overlay_transparent(output_img, tomato, w//3, h//3, (200, 200))
 
-            # --- 最終成品渲染呈現 ---
+            # --- 最終成品呈現 ---
             st.subheader("🎉 辨識與貼圖結果")
             st.image(cv2.cvtColor(output_img, cv2.COLOR_BGR2RGB), use_container_width=True)
             
