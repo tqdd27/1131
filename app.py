@@ -75,7 +75,7 @@ if ctx.video_receiver:
         except Exception as e:
             st.error(f"拍照識別時發生錯誤: {e}")
 else:
-    st.info("請先點擊上方的『Start』按鈕啟動您的視訊鏡頭。")        x2_o, y2_o = x1_o + (x2 - x1), y1_o + (y2 - y1)
+    st.info("請先點擊上方的『Start』按鈕啟動您的視訊鏡頭。")        #x2_o, y2_o = x1_o + (x2 - x1), y1_o + (y2 - y1)
 
         if x2 - x1 <= 0 or y2 - y1 <= 0:
             return background
